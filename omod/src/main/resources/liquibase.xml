@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog/1.9"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog/1.9
+                  http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-1.9.xsd">
+
+    <changeSet id="${project.parent.artifactId}-20171121-1128" author="aojwang">
+        <comment>
+            Deletes voided orders in readiness for upgrade to 1.11.x
+        </comment>
+        <sql>
+            DELETE orders, drug_order
+            FROM orders
+            INNER JOIN drug_order ON orders.order_id = drug_order.order_id
+            WHERE orders.voided=1;
+        </sql>
+    </changeSet>
+
+    <changeSet id="${project.parent.artifactId}-20171121-1410" author="aojwang">
+        <comment>
+            preparation for upgrade to 1.11.x. Adding java_class_name and parent columns to order_type table
+        </comment>
+        <sql>
+            ALTER TABLE `order_type`
+            ADD COLUMN `java_class_name` VARCHAR(255) DEFAULT NULL,
+            ADD COLUMN `parent` INT(11) DEFAULT NULL;
+
+            UPDATE  order_type SET java_class_name = 'org.openmrs.DrugOrder' WHERE   name='Drug Order';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

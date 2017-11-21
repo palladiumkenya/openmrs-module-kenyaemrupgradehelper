@@ -1,9 +1,9 @@
 package org.openmrs.module.kenyaemrupgradehelper.chore;
 
 import org.openmrs.*;
-import org.openmrs.api.EncounterService;
+import org.openmrs.api.OrderService;
 import org.openmrs.api.PatientService;
-import org.openmrs.api.ProviderService;
+import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.kenyacore.chore.AbstractChore;
 import org.openmrs.module.kenyaemr.api.KenyaEmrService;
@@ -12,6 +12,7 @@ import org.openmrs.module.metadatadeploy.MetadataUtils;
 import org.springframework.stereotype.Component;
 
 import java.io.PrintWriter;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -19,6 +20,7 @@ import java.util.List;
  */
 @Component("kenyaemr.chore.AddEncountersAndProviderForExistingOrders")
 public class AddEncountersAndProviderForExistingOrders extends AbstractChore {
+
 
     /**
      * @see org.openmrs.module.kenyacore.chore.AbstractChore#perform(java.io.PrintWriter)
@@ -31,19 +33,30 @@ public class AddEncountersAndProviderForExistingOrders extends AbstractChore {
     }
 
     private void fillProvidersAndEncountersForDrugOrders(List<Patient> allPatients, PrintWriter out) {
-        ProviderService providerService = Context.getProviderService();
+        // first check to confirm if the user already exists
+        User drugOrderer = Context.getUserService().getUserByUsername("upgradeUser");
+        if (drugOrderer == null)
+            drugOrderer = createProviderForOrders();
 
-        EncounterService encounterService = Context.getEncounterService();
-        EncounterRole encounterRole = encounterService.getEncounterRoleByUuid("a0b03050-c99b-11e0-9572-0800200c9a66");
-        Provider unknownProvider = providerService.getProviderByUuid("ae01b8ff-a4cc-4012-bcf7-72359e852e14");
-
-        User drugOrderer = Context.getUserService().getUserByUsername("unknown_provider");
-        for(Patient patient : allPatients) {
-            List<DrugOrder> allOrdersForAPatient = Context.getOrderService().getDrugOrdersByPatient(patient);
+        for (Patient patient : allPatients) {
+            List<DrugOrder> allOrdersForAPatient = Context.getOrderService().getDrugOrdersByPatient(patient, OrderService.ORDER_STATUS.ANY, true);
             for (DrugOrder drugOrder : allOrdersForAPatient) {
-                drugOrder.setOrderer(drugOrder.getCreator());
+                // set orderer
+                drugOrder.setOrderer(drugOrderer);
 
-                //if(drugOrder.getEncounter() == null || drugOrder.getEncounter().equals(null)) {
+                // fix discontinuation details
+
+                if (drugOrder.getDiscontinued()) {
+                    if(drugOrder.getDiscontinuedBy() == null) {
+                        drugOrder.setDiscontinuedBy(drugOrderer);
+                    }
+
+                    if(drugOrder.getDiscontinuedDate() == null) {
+                        drugOrder.setDiscontinuedDate(new Date());
+                    }
+                }
+
+                // create drug order encounter for order
                 Encounter encounter = new Encounter();
                 encounter.setEncounterDatetime(drugOrder.getStartDate());
                 encounter.setPatient(patient);
@@ -51,15 +64,28 @@ public class AddEncountersAndProviderForExistingOrders extends AbstractChore {
                 encounter.setForm(MetadataUtils.existing(Form.class, HivMetadata._Form.DRUG_ORDER));
                 encounter.setEncounterType(MetadataUtils.existing(EncounterType.class, HivMetadata._EncounterType.DRUG_ORDER));
                 encounter.setCreator(drugOrder.getCreator());
-                encounter.setProvider(encounterRole, unknownProvider);
                 encounter.setDateCreated(drugOrder.getDateCreated());
                 Context.getEncounterService().saveEncounter(encounter);
 
-                // }
                 drugOrder.setEncounter(encounter);
                 Context.getOrderService().saveOrder(drugOrder);
+                out.println("Successfully processed order: " + drugOrder.getId() + " ===> Encounter ID: " + encounter.getId());
             }
 
         }
+    }
+
+    private User createProviderForOrders() {
+        UserService us = Context.getUserService();
+        User u = new User();
+        u.setPerson(new Person());
+
+        Role clinician = us.getRole("Clinician");
+        u.addName(new PersonName("Orders", "Upgrade", "User"));
+        u.setUsername("upgradeUser");
+        u.getPerson().setGender("M");
+        u.addRole(clinician);
+        User createdUser = us.saveUser(u, "Openmr5xy");
+        return createdUser;
     }
 }
