@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
 /**
  * To migrate to 1.10.x it is a requirement that each drug order should be associated with a provider and an encounter
  */
-@Component("kenyaemrupgradehelper.chore.AddEncountersAndProviderForExistingOrders")
+/*@Component("kenyaemrupgradehelper.chore.AddEncountersAndProviderForExistingOrders")*/
 public class AddEncountersAndProviderForExistingOrders extends AbstractChore {
 
     // Logger
@@ -97,6 +97,12 @@ public class AddEncountersAndProviderForExistingOrders extends AbstractChore {
         u.getPerson().setGender("M");
         u.addRole(clinician);
         User createdUser = us.saveUser(u, "Openmr5xy");
+
+        /*Provider provider = new Provider();
+        provider.setPerson(createdUser.getPerson());
+        provider.setIdentifier(createdUser.getSystemId());
+        Context.getProviderService().saveProvider(provider);*/
+
         return createdUser;
     }
 
