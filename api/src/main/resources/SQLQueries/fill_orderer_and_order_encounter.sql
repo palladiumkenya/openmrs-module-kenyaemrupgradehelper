@@ -36,6 +36,8 @@ BEGIN
 
   END LOOP get_enrollment_record;
   ELSE
+    update orders set discontinued_by=userID where discontinued=1 and discontinued_by is null;
+    update orders set discontinued_date=curdate() where discontinued=1 and discontinued_date is null;
     SELECT "NO ROWS WERE FOUND";
   END IF;
 
@@ -53,6 +55,8 @@ BEGIN
   DECLARE patientID INT(11);
   DECLARE encounterDate DATETIME;
   DECLARE encounterID INT(11);
+  DECLARE discontinued INT(11);
+
 
   DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -62,7 +66,8 @@ BEGIN
   -- perform all procedure calls within a transaction
   START TRANSACTION;
 
-  SELECT creator, patient_id, date_created INTO creatorID, patientID, encounterDate from orders where uuid=recordUUID;
+  SELECT creator, patient_id, date_created, discontinued INTO creatorID, patientID, encounterDate, discontinued from orders where uuid=recordUUID;
+
 
 
   insert into encounter (encounter_type, patient_id, form_id, encounter_datetime, creator, date_created)
@@ -71,9 +76,35 @@ BEGIN
   SET encounterID = LAST_INSERT_ID();
   UPDATE orders set orderer=providerID, encounter_id=encounterID where uuid=recordUUID;
 
+  IF discontinued = 1 THEN
+    UPDATE orders set discontinued_date=CURDATE(), discontinued_by=providerID where uuid=recordUUID;
+  END IF;
+
   COMMIT;
 
 END;
   $$
 DELIMITER ;
+
+DELIMITER $$
+DROP PROCEDURE IF EXISTS sp_effect_db_changes_on_orders$$
+CREATE PROCEDURE sp_effect_db_changes_on_orders()
+  BEGIN
+
+    ALTER TABLE `order_type`
+      ADD COLUMN `java_class_name` VARCHAR(255) DEFAULT NULL,
+      ADD COLUMN `parent` INT(11) DEFAULT NULL;
+
+    UPDATE `order_type` SET `java_class_name` = 'org.openmrs.TestOrder' WHERE name ='LAB TEST ORDERS';
+    UPDATE  order_type SET java_class_name = 'org.openmrs.DrugOrder' WHERE   name='Drug Order';
+
+  END
+$$
+DELIMITER ;
+
+
+-- Procedure for upgrading
+-- Create a user with provider role using the name : upgradeManager
+call sp_effect_db_changes_on_orders();
+call sp_process_drug_orders("upgradeManager");
 
