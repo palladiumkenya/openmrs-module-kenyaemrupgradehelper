@@ -97,6 +97,7 @@ CREATE PROCEDURE sp_effect_db_changes_on_orders()
 
     UPDATE `order_type` SET `java_class_name` = 'org.openmrs.TestOrder' WHERE name ='LAB TEST ORDERS';
     UPDATE  order_type SET java_class_name = 'org.openmrs.DrugOrder' WHERE   name='Drug Order';
+    UPDATE drug_order set route=160240; -- previous orders never filled this one
 
   END
 $$
